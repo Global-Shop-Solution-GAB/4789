@@ -1,0 +1,695 @@
+Program.Sub.ScreenSU.Start
+Gui.Selection..create
+Gui.Selection..caption("Select File to Upload")
+Gui.Selection..size(8520,2070)
+Gui.Selection..minx(0)
+Gui.Selection..miny(0)
+Gui.Selection..position(0,0)
+Gui.Selection..event(UnLoad,form1_unload)
+Gui.Selection..forecolor(0)
+Gui.Selection..BackColor(-2147483633)
+Gui.Selection..mousepointer(0)
+Gui.Selection..sizeable(False)
+Gui.Selection.frame1.Create(Frame)
+Gui.Selection.frame1.Size(8175,1560)
+Gui.Selection.frame1.Position(75,90)
+Gui.Selection.frame1.Caption(".xls File")
+Gui.Selection.lbl1.create(label,"File path",True,1935,255,1,195,345,True,0,Arial,8,-2147483633,0)
+Gui.Selection.lbl1.defaultvalue("")
+Gui.Selection.lbl1.Parent("frame1")
+Gui.Selection.txtBrowseFile.create(textbox,"",True,7260,300,0,180,585,True,0,Arial,8,-2147483643,1)
+Gui.Selection.txtBrowseFile.defaultvalue("")
+Gui.Selection.txtBrowseFile.Parent("frame1")
+Gui.Selection.cmdBrwsFile.create(button)
+Gui.Selection.cmdBrwsFile.caption("^")
+Gui.Selection.cmdBrwsFile.size(525,375)
+Gui.Selection.cmdBrwsFile.position(7530,555)
+Gui.Selection.cmdBrwsFile.event(Click,cmdbrwsfile_click)
+Gui.Selection.cmdBrwsFile.defaultvalue("")
+Gui.Selection.cmdBrwsFile.Parent("frame1")
+Gui.Selection.cmdUpload.create(button)
+Gui.Selection.cmdUpload.caption("Upload")
+Gui.Selection.cmdUpload.size(855,375)
+Gui.Selection.cmdUpload.position(195,1020)
+Gui.Selection.cmdUpload.event(Click,cmdupload_click)
+Gui.Selection.cmdUpload.defaultvalue("")
+Gui.Selection.cmdUpload.Parent("frame1")
+Gui.ProcessBar..Create
+Gui.ProcessBar..Size(6945,1905)
+Gui.ProcessBar..MinX(0)
+Gui.ProcessBar..MinY(0)
+Gui.ProcessBar..Position(0,0)
+Gui.ProcessBar..BackColor(-2147483633)
+Gui.ProcessBar..MousePointer(0)
+Gui.ProcessBar.proBar.Create(ProgressBar)
+Gui.ProcessBar.proBar.Size(6165,255)
+Gui.ProcessBar.proBar.Position(360,390)
+Gui.ProcessBar.lblProcess.Create(Label,"Label",True,6165,255,0,360,930,True,0,"Arial",8,-2147483633,0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.sFileExcel.Declare(String)
+V.Global.sFileExcel_Result.Declare(String)
+V.Global.sOrderFile.Declare(String)
+V.Global.sFileDirOrd.Declare(String)
+V.Global.sOrderNum.Declare(String)
+F.Intrinsic.String.Build("{0}\SALESHDR.TXT",V.Caller.FilesDir,V.Global.sFileDirOrd)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN Apr 3, 2017
+'This project will allow for the upload of Sales Orders from an .xls file
+'User will run this from Order Entry > File > Auto Sales Upload
+'After processing, the project will create an .xls result file with the name as OriginalFile_Terminal_Result.xls in the same folder of the uploaded .xls file.
+
+F.Intrinsic.Control.Try
+
+	F.ODBC.Connection!conX.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+	
+	gui.Selection..Show
+	gui.Selection.cmdBrwsFile.SetFocus
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(CatchError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.cmdbrwsfile_click.Start
+F.Intrinsic.Control.Try
+	'open a file explorer and look for an xls sheet
+	F.Intrinsic.UI.ShowOpenFileDialog("",".xls",V.Global.sFileExcel)
+	F.Intrinsic.Control.If(V.Global.sFileExcel,=,"***CANCEL***")
+		F.Intrinsic.UI.Msgbox("No File Was Selected")
+		F.Intrinsic.Control.ExitSub
+	F.Intrinsic.Control.EndIf
+	
+	gui.Selection.txtBrowseFile.Text(V.Global.sFileExcel)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(CatchError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdbrwsfile_click.End
+
+Program.Sub.cmdupload_click.Start
+F.Intrinsic.Control.Try
+	V.Local.sSQL.Declare(String)
+	V.Local.sMap.Declare(String)
+	V.Local.sRow.Declare(String)
+	V.Local.sCol.Declare(String)
+	V.Local.sDueDate.Declare(String)
+	V.Local.sOrderPlace.Declare(String)
+	V.Local.sPart.Declare(String)
+	V.Local.sErrorFilePath.Declare(String)
+	V.Local.sHold.Declare(String)
+	V.Local.sRev.Declare(String)
+	V.Local.sPart17.Declare(String)
+	V.Local.iHandle.Declare(Long)
+	V.Local.iCounter.Declare(Long)
+	V.Local.iExcel.Declare(Long)
+	V.Local.iRowNum.Declare(Long)
+	V.Local.iCheckResult.Declare(Long)
+	V.Local.iHold.Declare(Long)
+	V.Local.iQuit.Declare(Long)
+	V.Local.iError.Declare(Long)
+	V.Local.iNum.Declare(Long)
+	V.Local.fHold.Declare(Float)
+	V.Local.fProcess.Declare(Float)
+	V.Local.bExists.Declare(Boolean)
+	V.Local.bGoodData.Declare(Boolean)
+	V.Local.bGoodPart.Declare(Boolean)
+	V.Local.bGoodCustomer.Declare(Boolean)
+	V.Local.bNumeric.Declare(Boolean)
+	V.Local.dDueDate.Declare(Date)
+	V.Local.dOrderPlace.Declare(Date)
+	
+	f.Intrinsic.Control.If(v.Screen.Selection!txtBrowseFile.Text.Trim, = , "")
+		f.Intrinsic.UI.Msgbox("Please select an Excel file")
+		f.Intrinsic.Control.ExitSub
+	f.Intrinsic.Control.EndIf
+	
+	'We copy this file, then get data and write result to the new file
+	f.Intrinsic.String.Split(v.Global.sFileExcel,".",v.Local.sHold)
+	f.Intrinsic.String.Concat(v.Local.sHold(0),"_",v.Caller.Terminal,"_Result.xls",v.Global.sFileExcel_Result)
+	F.Intrinsic.File.CopyFile(V.Global.sFileExcel,V.Global.sFileExcel_Result)
+	
+	gui.ProcessBar.proBar.Max(10)
+	gui.ProcessBar.proBar.Value(1)
+	gui.ProcessBar.lblProcess.Text("...collecting data")
+	gui.ProcessBar..Show
+	
+	'prepare the excel sheet to be read
+	v.Local.iExcel.Set(1)
+	F.Automation.MSExcel.CreateAppObject("MSExcel")
+	F.Automation.MSExcel.OpenWorkbook("MSEXcel","Excel_Sheets",V.Global.sFileExcel_Result)
+	F.Automation.MSExcel.OpenWorksheet("Excel_Sheets","Sheet",V.Local.iExcel)
+	Function.Automation.MSExcel.WriteCell("Sheet", 1, 21,"Result")
+	Function.Automation.MSExcel.WriteCell("Sheet", 1, 22,"Sales_Order_Num")
+	Function.Automation.MSExcel.WriteCell("Sheet", 1, 23,"Reason")
+	
+	'get the number of rows of the current spreadsheet
+	F.Automation.MSExcel.RowCount("Sheet",V.Local.iRowNum)
+	f.ODBC.Connection!conX.Execute("Delete from GCG_4789_SO")
+	f.Data.DataTable.CreateFromSQL("Sales_Order","conx","SELECT Customer, Part, Description, Rev, Price, PO_Num, Due_Date, Order_Qty, Order_Placed, Seq, ShipTo_Name, Address_1, Address_2, City, State, Zip, Country FROM GCG_4789_SO",True)
+	
+	gui.ProcessBar.proBar.Value(2)
+	'START AT 1 for title, then from 2 will be data for sales orders
+	F.Intrinsic.Control.For(V.Local.iCounter,2,v.Local.iRowNum,1)
+		v.Local.bGoodData.Set(True)
+		v.Local.bGoodPart.Set(True)
+		v.Local.bGoodCustomer.Set(True)
+		F.Automation.MSExcel.ReadRow("Sheet",V.Local.iCounter,1,19,V.local.srow)
+		F.Intrinsic.String.Split(V.Local.srow,"*!*",V.Local.sCol)	
+		'v.local.sCol(0) : Customer
+		'v.local.sCol(1) : Part
+		'v.local.sCol(2) : Description
+		'v.local.sCol(3) : Rev
+		'v.local.sCol(4) : Price
+		'v.local.sCol(5) : PO_Num
+		'v.local.sCol(7) : Due_Date
+		'v.local.sCol(8) : Order_Qty
+		'v.local.sCol(11) : Order_Place	
+		f.Intrinsic.Control.If(v.Local.sCol(0).Trim,<>,"")
+		f.Intrinsic.Control.AndIf(v.Local.sCol(1).Trim,<>,"")
+		
+			F.Intrinsic.Control.If(V.Local.sCol(3).Trim,=,"0.0000000000")
+				v.Local.sRev.Set("00")
+			f.Intrinsic.Control.Else
+				f.Intrinsic.String.Trim(v.Local.sCol(3),v.Local.sRev)
+			f.Intrinsic.Control.EndIf
+			
+			'Check if Part exists
+			f.Intrinsic.String.GSSPartString(v.local.sCol(1).Trim,v.Local.sRev,v.Local.sPart)
+			f.Intrinsic.String.Build("SELECT COUNT(*) FROM V_Inventory_Mstr WHERE LTRIM(RTRIM(Part)) = '{0}'",v.Local.sPart,v.Local.sSQL)
+			f.ODBC.Connection!conX.ExecuteAndReturn(v.Local.sSQL,v.Local.iCheckResult)
+			F.Intrinsic.Control.If(v.Local.iCheckResult,=,0)
+				'Part does not exits
+				v.Local.bGoodData.Set(False)
+				v.Local.bGoodPart.Set(False)
+			f.Intrinsic.Control.EndIf
+				
+			'Check if Customer exists
+			f.Intrinsic.String.Build("SELECT COUNT(*) FROM V_Customer_Master WHERE Customer = '{0}'",V.Local.sCol(0).Trim,v.Local.sSQL)
+			f.ODBC.Connection!conX.ExecuteAndReturn(v.Local.sSQL,v.Local.iCheckResult)
+			F.Intrinsic.Control.If(v.Local.iCheckResult,=,0)
+				'Customer does not exists
+				v.Local.bGoodData.Set(False)
+				v.Local.bGoodCustomer.Set(False)
+			f.Intrinsic.Control.EndIf
+				
+			F.Intrinsic.String.Format(V.Local.sCol(7).Trim,"mmddyy",V.Local.sDueDate)
+			F.Intrinsic.String.Format(V.Local.sCol(11).Trim,"mmddyy",V.Local.sOrderPlace)
+			
+			f.Intrinsic.Control.If(v.Local.bGoodData,=,True)
+				f.Intrinsic.Math.Add(v.Local.iNum,1,v.Local.iNum)
+				'BN Apr 24, Truncate Description column to 30 characters
+				f.Intrinsic.String.Left(v.Local.sCol(2).Trim,30,v.Local.sCol(2))
+				f.Intrinsic.String.Left(v.Local.sCol(12).Trim,30,v.Local.sCol(12))
+				f.Intrinsic.String.Left(v.Local.sCol(13).Trim,30,v.Local.sCol(13))
+				f.Intrinsic.String.Left(v.Local.sCol(14).Trim,30,v.Local.sCol(14))
+				f.Intrinsic.String.Left(v.Local.sCol(15).Trim,15,v.Local.sCol(15))
+				f.Intrinsic.String.Left(v.Local.sCol(16).Trim,2,v.Local.sCol(16))
+				f.Intrinsic.String.Left(v.Local.sCol(17).Trim,13,v.Local.sCol(17))
+				f.Intrinsic.String.Left(v.Local.sCol(18).Trim,12,v.Local.sCol(18))
+				f.Data.DataTable.AddRow("Sales_Order", "CUSTOMER",v.local.sCol(0).Trim,"PART",v.local.sCol(1).Trim,"DESCRIPTION",v.local.sCol(2).Trim,"REV",v.local.sRev,"PRICE",v.local.sCol(4).Trim,"PO_NUM",v.local.sCol(5).Trim,"DUE_DATE",v.local.sDueDate,"ORDER_QTY",v.local.sCol(8).Trim,"ORDER_PLACED",v.local.sOrderPlace,"SEQ",V.Local.iNum,"SHIPTO_NAME",v.local.sCol(12).Trim,"ADDRESS_1",v.local.sCol(13).Trim,"ADDRESS_2",v.local.sCol(14).Trim,"CITY",v.local.sCol(15).Trim,"STATE",v.local.sCol(16).Trim,"ZIP",v.local.sCol(17).Trim,"COUNTRY",v.local.sCol(18).Trim)
+				Function.Automation.MSExcel.WriteCell("Sheet", v.Local.iCounter, 21,"Created")			
+			f.Intrinsic.Control.Else
+				f.Intrinsic.Math.Add(v.Local.iError,1,v.Local.iError)			
+				f.Intrinsic.Control.If(v.Local.bGoodPart,=,False)
+				f.Intrinsic.Control.AndIf(v.Local.bGoodCustomer,=,False)
+					v.Local.sHold.Set("Part n Customer")			
+				f.Intrinsic.Control.ElseIf(v.Local.bGoodPart,=,False)
+					v.Local.sHold.Set("Part")
+				f.Intrinsic.Control.Else
+					v.Local.sHold.Set("Customer")			
+				f.Intrinsic.Control.EndIf		
+				
+				Function.Automation.MSExcel.WriteCell("Sheet", v.Local.iCounter, 21,"Error")
+				Function.Automation.MSExcel.WriteCell("Sheet", v.Local.iCounter, 23,v.Local.sHold)
+				
+			f.Intrinsic.Control.EndIf
+	
+		f.Intrinsic.Control.Else
+			f.Intrinsic.Math.Add(v.Local.iQuit,1,v.Local.iQuit)
+			f.Intrinsic.Control.If(v.Local.iQuit,>,5)
+				'This prevents programs to proceed with more than 5 blank rows
+				f.Intrinsic.Control.ExitFor(v.Local.iCounter)
+			f.Intrinsic.Control.EndIf
+		f.Intrinsic.Control.EndIf
+		
+	f.Intrinsic.Control.Next(v.Local.iCounter)
+	
+	gui.ProcessBar.proBar.Value(3)
+	gui.ProcessBar.lblProcess.Text("...processing data")
+	
+	v.Local.sMap.Set("CUSTOMER@!@CUSTOMER*!*PART@!@PART*!*DESCRIPTION@!@DESCRIPTION*!*Rev@!@Rev*!*PRICE@!@PRICE*!*PO_NUM@!@PO_NUM*!*DUE_DATE@!@DUE_DATE*!*ORDER_QTY@!@ORDER_QTY*!*ORDER_PLACED@!@ORDER_PLACED*!*SEQ@!@SEQ*!*SHIPTO_NAME@!@SHIPTO_NAME*!*ADDRESS_1@!@ADDRESS_1*!*ADDRESS_2@!@ADDRESS_2*!*CITY@!@CITY*!*STATE@!@STATE*!*ZIP@!@ZIP*!*COUNTRY@!@COUNTRY")
+	Function.Data.DataTable.SaveToDB("Sales_Order", "conx", "GCG_4789_so", "",128, v.Local.sMap)
+	
+	f.Data.DataTable.Close("Sales_Order")
+	
+	'Create dataTable contains distinct PO_NUM from the GoodData database table "GCG_4789_SO", for each PO_NUM, create a Sales Order.
+	f.Data.DataTable.CreateFromSQL("PO_NUM_DT","conx","SELECT DISTINCT RTRIM(LTRIM(PO_Num)) AS PO_Num FROM GCG_4789_SO",True)
+	f.Intrinsic.Control.If(V.DataTable.PO_NUM_DT.RowCount,<>,0)
+		f.Intrinsic.Math.Div(1, V.DataTable.PO_NUM_DT.RowCount,v.Local.fHold)	
+		f.Intrinsic.Math.Mult(v.Local.fHold,0.5,v.Local.fHold)
+	f.Intrinsic.Control.Else
+		v.Local.iHold.Set(1)
+	f.Intrinsic.Control.EndIf
+	
+	v.Local.fProcess.Set(3)
+	
+	Function.Data.Dictionary.Create("SO_PO")
+	Function.Data.Dictionary.SetDefaultReturn("SO_PO", " ")
+	
+	F.Intrinsic.Control.For(V.Local.iCounter,0,V.DataTable.PO_NUM_DT.RowCount--,1)
+		f.Intrinsic.Math.Add(v.Local.fProcess,v.Local.fHold,v.Local.fProcess)
+		Function.Intrinsic.Math.Int(v.Local.fProcess,v.Local.iHold)
+		gui.ProcessBar.proBar.Value(v.Local.iHold)
+		f.Intrinsic.Control.CallSub(create_salesorder,"PO_NUM",v.DataTable.PO_NUM_DT(v.Local.iCounter).PO_NUM!FieldValString)	
+		Function.Data.Dictionary.AddItem("SO_PO", v.Global.sOrderNum, v.DataTable.PO_NUM_DT(v.Local.iCounter).PO_NUM!FieldValString)	
+	f.Intrinsic.Control.Next(v.Local.iCounter)
+	
+	gui.ProcessBar.proBar.Value(8)
+	gui.ProcessBar.lblProcess.Text("...writing result")
+	
+	v.Local.iQuit.Set(0)
+	F.Intrinsic.Control.For(V.Local.iCounter,2,v.Local.iRowNum,1)
+		F.Automation.MSExcel.ReadRow("Sheet",V.Local.iCounter,1,22,V.local.srow)
+		F.Intrinsic.String.Split(V.Local.srow,"*!*",V.Local.sCol)	
+		'v.local.sCol(5) : PO_Num
+		'v.local.sCol(15) : Result	
+		f.Intrinsic.Control.If(v.Local.sCol(0).Trim,<>,"")
+		f.Intrinsic.Control.AndIf(v.Local.sCol(1).Trim,<>,"")
+		
+			f.Intrinsic.Control.If(v.Local.sCol(20).Trim,=,"Created")
+				Function.Data.Dictionary.ReturnKeyFromValue("SO_PO", v.local.sCol(5).Trim, v.Local.sHold)
+				Function.Automation.MSExcel.WriteCell("Sheet", v.Local.iCounter, 22,v.Local.sHold)
+			f.Intrinsic.Control.EndIf
+		
+		f.Intrinsic.Control.Else
+		
+			f.Intrinsic.Math.Add(v.Local.iQuit,1,v.Local.iQuit)
+			f.Intrinsic.Control.If(v.Local.iQuit,>,5)
+				'This prevents programs to proceed with more than 5 blank rows
+				f.Intrinsic.Control.ExitFor(v.Local.iCounter)
+			f.Intrinsic.Control.EndIf
+			
+		f.Intrinsic.Control.EndIf	
+		
+	f.Intrinsic.Control.Next(v.Local.iCounter)
+	
+	Function.Automation.MSExcel.SaveWorkBook("Excel_Sheets")
+	F.Automation.MSExcel.DestroyAllObjects("MSExcel","Excel_Sheets","Sheet")
+	
+	Function.Data.Dictionary.Close("SO_PO")
+	gui.ProcessBar.proBar.Value(10)
+	
+	'Update the Last Order Number value stored in Company Options
+	F.Intrinsic.Control.If(V.Global.sOrderNum.Trim,<>,"")
+		F.Intrinsic.String.LPad(V.Global.sOrderNum,"0",7,V.Global.sOrderNum)
+		
+		F.Intrinsic.String.Build("UPDATE Op_Header SET F_Numeric = '{0}' WHERE ID = '400358' AND Sequence = '0000'",V.Global.sOrderNum,V.Local.sSQL)
+		F.ODBC.Connection!conX.Execute(V.Local.sSQL)
+		
+		F.Intrinsic.String.Build("UPDATE Last_PO SET Last_PO_Num = '{0}' WHERE ASS_SYS = 'ORD' AND ASS_SUB_SYS = 'NUM'",V.Global.sOrderNum,V.Local.sSQL)
+		F.ODBC.Connection!conX.Execute(V.Local.sSQL)
+		
+	F.Intrinsic.Control.EndIf
+	
+	gui.ProcessBar.lblProcess.Text("Complete")
+	
+	f.Intrinsic.String.Concat(v.Local.iError," error rows. Please see result file in the same folder",v.Local.sHold)
+	f.Intrinsic.UI.Msgbox(v.Local.sHold,"End")
+	
+	f.Intrinsic.Control.CallSub(form1_unload)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(CatchError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdupload_click.End
+
+Program.Sub.Create_SalesOrder.Start
+F.Intrinsic.Control.Try
+	V.Local.sSQL.Declare(String)
+	V.Local.sOrder.Declare(String)
+	V.Local.sTempOrd.Declare(String)
+	V.Local.sFullTempOrd.Declare(String)
+	V.Local.sRet.Declare(String)
+	V.Local.sLine.Declare(String)
+	V.Local.sTemp2.Declare(String)
+	V.Local.sCustomer.Declare(String)
+	V.Local.sPart.Declare(String)
+	V.Local.sRev.Declare(String)
+	V.Local.sGSSPart.Declare(String)
+	V.Local.sDescription.Declare(String)
+	V.Local.sPrice.Declare(String)
+	V.Local.sDueDate.Declare(String)
+	V.Local.sOrderQty.Declare(String)
+	V.Local.sOrderPlaced.Declare(String)
+	V.Local.sText.Declare(String)
+	V.Local.sCost.Declare(String)
+	V.Local.sHold.Declare(String)
+	V.Local.sShipName.Declare(String)
+	V.Local.sAdd1.Declare(String)
+	V.Local.sAdd2.Declare(String)
+	V.Local.sCity.Declare(String)
+	V.Local.sState.Declare(String)
+	V.Local.sZip.Declare(String)
+	V.Local.sCountry.Declare(String)
+	V.Local.iHandle.Declare(Long)
+	V.Local.iRow.Declare(Long)
+	V.Local.iRet.Declare(Long)
+	V.Local.iLastRow.Declare(Long)
+	V.Local.iCounter.Declare(Long)
+	V.Local.iLine.Declare(Long)
+	V.Local.bExists.Declare(Boolean)
+	v.Local.fHold.Declare(float)
+	
+	'Some important fields are left as comments with the position and number of characters, just in case the client needs us to pass data
+	
+	'get next order number
+	V.Local.sSQL.set("SELECT MAX(CONVERT(Order_No,SQL_BIGINT) + 1) AS NextOrd FROM V_Order_Header WHERE ISNUMERIC(Order_No) = 1")
+	F.ODBC.Connection!conX.OpenRecordsetRO("rst",V.Local.sSQL)
+	F.Intrinsic.String.LPad(V.ODBC.conX!rst.FieldValLTrim!nextOrd,"0",7,V.Local.sOrder)
+	'Set the Global.sOrderNum to add to dictionary that will write result afterwards
+	v.Global.sOrderNum.Set(v.Local.sOrder)
+	F.ODBC.conX!rst.Close
+	
+	'Create Header: Record A, B, C
+	f.Intrinsic.String.Build("SELECT TOP 1 Customer, Order_Placed, Due_Date, ShipTo_Name, Address_1, Address_2, City, State, Zip, Country FROM GCG_4789_SO WHERE LTRIM(RTRIM(PO_Num)) = '{0}'",V.Args.PO_NUM,v.Local.sSql)
+	f.Data.DataTable.CreateFromSQL("a_Sales_Order","conx",v.Local.sSql,true)
+	v.Local.sCustomer.Set(Variable.DataTable.a_Sales_Order(v.Local.iCounter).Customer!FieldValTrim)
+	v.Local.sOrderPlaced.Set(Variable.DataTable.a_Sales_Order(v.Local.iCounter).Order_Placed!FieldValTrim)
+	v.Local.sDueDate.Set(Variable.DataTable.a_Sales_Order(v.Local.iCounter).Due_Date!FieldValTrim)
+	''record body A
+	'order #,filler,record type
+	F.Intrinsic.String.Concat(V.Local.sOrder,"   ","A",V.Local.sTempOrd)
+	'customer id
+	F.Intrinsic.String.RPad(V.Local.sCustomer," ",6,V.Local.sCustomer)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sCustomer,V.Local.sTempOrd)
+	
+	'Ship-To ID 18-23 (6 characters)
+	
+	'Order Date
+	F.Intrinsic.String.RPad(V.Local.sTempOrd," ",29,V.Local.sTempOrd)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sOrderPlaced,V.Local.sTempOrd)
+	'Due Date
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sDueDate,V.Local.sTempOrd)
+	
+	'Order Type 43-43: Spaces - Regular, X - Invoice Only
+	
+	'Purchase Order 48 - 62 (15 characters)
+	f.Intrinsic.String.RPad(V.Local.sTempOrd," ",47,V.Local.sTempOrd)
+	f.Intrinsic.String.RPad(v.Args.PO_NUM," ",15,v.Local.sTemp2)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,v.Local.sTemp2,V.Local.sTempOrd)
+	
+	'Mark Shipment 63-92 (30 characters)
+	f.Intrinsic.String.Build("SELECT Attention FROM V_Customer_Master WHERE Customer = '{0}'",v.Local.sCustomer,v.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,<>,True)
+		v.Local.sTemp2.Set(v.ODBC.conx!rst.FieldValTrim!ATTENTION)
+	f.Intrinsic.Control.EndIf
+	f.ODBC.conx!rst.Close
+	f.Intrinsic.String.RPad(v.Local.sTemp2," ",15,v.Local.sTemp2)
+	F.Intrinsic.String.RPad(v.Local.sTempOrd," ",62,V.Local.sTempOrd)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,v.Local.sTemp2,V.Local.sTempOrd)
+	
+	'terms
+	F.Intrinsic.String.Build("SELECT Terms_Message FROM V_AR_Terms WHERE Terms_Code IN (SELECT Payment_terms FROM V_Customer_Sales WHERE Customer ='{0}')",V.Local.sCustomer,V.Local.sSQL)
+	F.ODBC.Connection!conX.OpenRecordsetRO("rst",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conX!rst.EOF,<>,True)
+		F.Intrinsic.String.RPad(V.ODBC.conX!rst.FieldValLTrim!terms_message," ",10,V.Local.sRet)
+		F.ODBC.conX!rst.Close
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.RPad("NET"," ",10,V.Local.sRet)
+		F.ODBC.conX!rst.Close
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.String.RPad(V.Local.sTempOrd," ",106,V.Local.sTempOrd)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sRet,V.Local.sTempOrd)
+	
+	'Ship-Via 356-375 (20 characters)
+	f.Intrinsic.String.RPad(V.Local.sTempOrd," ",355,V.Local.sTempOrd)
+	
+	F.Intrinsic.String.Build("SELECT TOP 1 Message FROM V_Ship_Via WHERE ID = (SELECT TOP 1 Ship_Via FROM V_Customer_ShipTo WHERE Customer = '{0}')",V.Local.sCustomer,V.Local.sSQL)
+	F.ODBC.Connection!conX.OpenLocalRecordsetRO("rstShipVia",V.Local.sSQL)
+	
+	F.Intrinsic.Control.If(V.ODBC.conx!rstShipVia.EOF,=,False)
+		F.Intrinsic.String.RPad(V.ODBC.conX!rstShipVia.FieldValTrim!Message," ",20,V.Local.sTemp2)
+	F.Intrinsic.Control.Else
+		f.Intrinsic.String.RPad("BEST WAY"," ",20,v.Local.sTemp2)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,v.Local.sTemp2,V.Local.sTempOrd)
+	
+	'Order Discount Percentage 376-391 (16 characters 1.4)
+	
+	'Price class code 392-392 (1 character)
+	
+	'Price Class Discount Percentage 393-408 (16 characters 1.4)
+	
+	'Commission Rate Type 409-413 (5 characters)
+	
+	'GL Account 401
+	'40097-0000
+	F.Intrinsic.String.RPad("40097-0000"," ",15,V.Local.sRet)
+	F.Intrinsic.String.RPad(V.Local.sTempOrd," ",413,V.Local.sTempOrd)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sRet,V.Local.sTempOrd)
+	
+	'Currency Code
+	F.Intrinsic.String.RPad(V.Local.sTempOrd," ",520,V.Local.sTempOrd)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,"USD",V.Local.sTempOrd)
+	
+	''BN May 4, 2017 
+	''Price Category 620-621
+	
+	'==================================New Line for Record B==========================================================
+	F.Intrinsic.String.Concat(V.Local.sFullTempOrd,V.Local.sTempOrd,V.Ambient.NewLine,V.Local.sFullTempOrd)
+	'=================================================================================================================
+	'record body B
+	F.Intrinsic.String.Concat(V.Local.sOrder,"   B",V.Local.sTempOrd)
+	
+	'==================================New Line for Record C==========================================================
+	F.Intrinsic.String.Concat(V.Local.sFullTempOrd,V.Local.sTempOrd,V.Ambient.NewLine,V.Local.sFullTempOrd)
+	'=================================================================================================================
+	'record body C
+	F.Intrinsic.String.Concat(V.Local.sOrder,"   C",V.Local.sTempOrd)
+	v.Local.sShipName.Set(Variable.DataTable.a_Sales_Order(v.Local.iCounter).SHIPTO_NAME!FieldValTrim)
+	v.Local.sAdd1.Set(Variable.DataTable.a_Sales_Order(v.Local.iCounter).ADDRESS_1!FieldValTrim)
+	v.Local.sAdd2.Set(Variable.DataTable.a_Sales_Order(v.Local.iCounter).ADDRESS_2!FieldValTrim)
+	v.Local.sCity.Set(Variable.DataTable.a_Sales_Order(v.Local.iCounter).CITY!FieldValTrim)
+	v.Local.sState.Set(Variable.DataTable.a_Sales_Order(v.Local.iCounter).STATE!FieldValTrim)
+	v.Local.sZip.Set(Variable.DataTable.a_Sales_Order(v.Local.iCounter).ZIP!FieldValTrim)
+	v.Local.sCountry.Set(Variable.DataTable.a_Sales_Order(v.Local.iCounter).COUNTRY!FieldValTrim)
+	F.Intrinsic.String.RPad(V.Local.sCustomer," ",6,V.Local.sCustomer)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sCustomer,V.Local.sTempOrd)
+	
+	f.Intrinsic.String.RPad(v.Local.sShipName," ",30,v.Local.sShipName)
+	f.Intrinsic.String.RPad(v.Local.sAdd1," ",30,v.Local.sAdd1)
+	f.Intrinsic.String.RPad(v.Local.sAdd2," ",30,v.Local.sAdd2)
+	
+	f.Intrinsic.String.RPad(v.Local.sCity," ",15,v.Local.sCity)
+	f.Intrinsic.String.RPad(v.Local.sState," ",2,v.Local.sState)
+	f.Intrinsic.String.RPad(v.Local.sZip," ",13,v.Local.sZip)
+	f.Intrinsic.String.RPad(v.Local.sCountry," ",12,v.Local.sCountry)
+	
+	F.Intrinsic.String.RPad(V.Local.sTempOrd," ",29,V.Local.sTempOrd)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,v.Local.sShipName,v.Local.sAdd1,v.Local.sAdd2,V.Local.sTempOrd)
+	F.Intrinsic.String.RPad(V.Local.sTempOrd," ",209,V.Local.sTempOrd)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,v.Local.sCity,v.Local.sState,v.Local.sZip,v.Local.sCountry,V.Local.sTempOrd)
+	
+	
+	'GL-Account 357-371 (15 characters)
+	F.Intrinsic.String.RPad(V.Local.sTempOrd," ",356,V.Local.sTempOrd)
+	F.Intrinsic.String.RPad("4010-0000"," ",15,V.Local.sRet)
+	F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sRet,V.Local.sTempOrd)
+	
+	'==================================New Line for Record Line L - Order Lines - 000-999===========================================================================================================================================
+	F.Intrinsic.String.Concat(V.Local.sFullTempOrd,V.Local.sTempOrd,V.Ambient.NewLine,V.Local.sFullTempOrd)
+	'===============================================================================================================================================================================================================================
+	
+	'Create DataTable for Order Lines
+	f.Intrinsic.String.Build("SELECT * FROM GCG_4789_SO WHERE LTRIM(RTRIM(PO_Num)) = '{0}' ORDER BY Seq",V.Args.PO_NUM,v.Local.sSql)
+	f.Data.DataTable.CreateFromSQL("Sales_Order_Lines","conx",v.Local.sSql,true)
+	
+	V.Local.iLine.Set(1)
+	F.Intrinsic.Control.For(V.Local.iCounter,0,v.DataTable.Sales_Order_Lines.RowCount--,1)
+		v.Local.sPart.Set(Variable.DataTable.Sales_Order_Lines(v.Local.iCounter).Part!FieldValTrim)	
+		v.Local.sRev.Set(Variable.DataTable.Sales_Order_Lines(v.Local.iCounter).Rev!FieldValTrim)
+		v.Local.sDescription.Set(Variable.DataTable.Sales_Order_Lines(v.Local.iCounter).Description!FieldValTrim)
+		v.Local.sPrice.Set(Variable.DataTable.Sales_Order_Lines(v.Local.iCounter).Price!FieldValTrim)
+		v.Local.sOrderQty.Set(Variable.DataTable.Sales_Order_Lines(v.Local.iCounter).Order_Qty!FieldValTrim)
+				
+		f.Intrinsic.String.GSSPartString(v.Local.sPart,v.Local.sRev,v.Local.sGSSPart)
+				
+		v.Local.sTempOrd.Set("")
+		'order no (7) + Line(3) + L(1) (total 11 characters)
+		F.Intrinsic.String.ConvertToString(V.Local.iLine,V.Local.sLine)
+		F.Intrinsic.String.LPad(V.Local.sLine,"0",3,V.Local.sLine)	
+		F.Intrinsic.String.Concat(V.Local.sOrder,V.Local.sLine,"L",V.Local.sTempOrd)
+		
+		'Customer Number 12-17 (6 characters)
+		F.Intrinsic.String.RPad(V.Local.sCustomer," ",6,V.Local.sCustomer)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sCustomer,V.Local.sTempOrd)	
+		
+		'quantity
+		F.Intrinsic.String.RPad(V.Local.sTempOrd," ",30,V.Local.sTempOrd)
+		v.Local.fHold.Set(V.Local.sOrderQty.Trim)
+		F.Intrinsic.String.Format(V.Local.fHold,"0.0000",V.Local.sRet)
+		f.Intrinsic.String.LPad(v.Local.sRet,"0",16, v.Local.sRet)	
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sRet,V.Local.sTempOrd)
+		
+		'backorder quantity
+		F.Intrinsic.String.RPad(V.Local.sTempOrd," ",62,V.Local.sTempOrd)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sRet,V.Local.sTempOrd)
+		
+		'Unit of Measure 95-96 (2 characters)
+		F.Intrinsic.String.RPad(V.Local.sTempOrd," ",94,V.Local.sTempOrd)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,"EA",V.Local.sTempOrd)
+		
+		'Part, Price, Cost next to each other
+		'part number
+		F.Intrinsic.String.RPad(V.Local.sTempOrd," ",96,V.Local.sTempOrd)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sGSSPart,V.Local.sTempOrd)
+		
+		'price
+		v.Local.fHold.Set(v.Local.sPrice)
+		F.Intrinsic.String.Format(V.Local.fHold,"0.00000",V.Local.sRet)
+		f.Intrinsic.String.LPad(v.Local.sRet,"0",16, v.Local.sRet)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sRet,V.Local.sTempOrd)
+		
+	'	'Client do not need Cost		
+	'	'Cost 16
+	 	F.Intrinsic.String.RPad(v.Local.sTempOrd," ",166,V.Local.sTempOrd)
+	'	F.Intrinsic.String.RPad(v.Local.sTempOrd," ",132,V.Local.sTempOrd)
+	'	f.Intrinsic.String.Build("Select AMT_Cost from Inventory_MSTR where part = '{0}'",v.Local.sGSSPart,v.Local.sSQL)
+	'	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+	'	F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,<>,True)
+	'		v.Local.sCost.Set(v.ODBC.conx!rst.FieldValTrim!AMT_Cost)
+	'	f.Intrinsic.Control.EndIf
+	'	f.ODBC.conx!rst.Close	
+	'	F.Intrinsic.String.Format(v.Local.sCost,"0000000000.000000",V.Local.sCost)
+	'	F.Intrinsic.String.RPad(V.Local.sCost," ",16,V.Local.sCost)
+	'	F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sCost,V.Local.sTempOrd)
+		
+		'Part description 167-196 (30 characters)
+		f.Intrinsic.String.Replace(v.Local.sDescription.Trim,v.ASCII.34,"in",v.Local.sRet)
+		F.Intrinsic.String.Replace(V.Local.sRet,"'","ft",V.Local.sRet)
+		F.Intrinsic.String.Left(V.Local.sRet,30,V.Local.sText)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sText,V.Local.sTempOrd)
+		
+		'user 1, 2, 3, 4, 5 field (30 characters each)
+		F.Intrinsic.String.RPad(" "," ",150,V.Local.sText)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sText,V.Local.sTempOrd)
+		
+		'hardcoded GL Account 
+		F.Intrinsic.String.RPad(V.Local.sTempOrd," ",386,V.Local.sTempOrd)
+		f.Intrinsic.String.Build("SELECT PL.Sales_Account AS GL_Account FROM V_Product_Line PL JOIN V_INVENTORY_MSTR IM ON PL.Product_Line = IM.Product_Line WHERE IM.Part = '{0}'",v.Local.sGSSPart,v.Local.sSQL)
+		F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,<>,True)
+			v.Local.sTemp2.Set(v.ODBC.conx!rst.FieldValTrim!GL_Account)
+			F.Intrinsic.String.RPad(v.Local.sTemp2," ",15,V.Local.sTemp2)
+			F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sTemp2,V.Local.sTempOrd)
+		f.Intrinsic.Control.EndIf
+		f.ODBC.conx!rst.Close	
+		
+		'Order date CCYYMMDD 478-485 (8 characters)
+		F.Intrinsic.String.RPad(V.Local.sTempOrd," ",477,V.Local.sTempOrd)
+		f.Intrinsic.String.Right(v.Local.sOrderPlaced,2,v.Local.sTemp2)
+		f.Intrinsic.String.Left(v.Local.sOrderPlaced,4,v.Local.sRet)
+		F.Intrinsic.String.Concat("20",v.Local.sTemp2,v.Local.sRet,v.Local.sTemp2)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,V.Local.sTemp2,V.Local.sTempOrd)	
+		
+		'Item Promise Date
+		F.Intrinsic.String.RPad(v.Local.sTempOrd," ",485,V.Local.sTempOrd)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,v.Local.sDueDate,V.Local.sTempOrd)
+		
+		'tax exempt (E: Exempt, T: Taxable)
+		F.Intrinsic.String.RPad(V.Local.sTempOrd," ",491,V.Local.sTempOrd)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,"T",V.Local.sTempOrd)
+		
+		'Currency Code
+		F.Intrinsic.String.RPad(V.Local.sTempOrd," ",564,V.Local.sTempOrd)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,"USD",V.Local.sTempOrd)
+		'extension amount
+		f.Intrinsic.Math.Mult(v.Local.sPrice,v.Local.sOrderQty,v.Local.fHold)
+		f.Intrinsic.String.Format(v.Local.fHold,"0.00",v.Local.sHold)
+		f.Intrinsic.String.LPad(v.Local.sHold,"0",16,v.Local.sHold)
+		F.Intrinsic.String.Concat(V.Local.sTempOrd,v.Local.sHold,V.Local.sTempOrd)
+		
+		'Product Line 589-590 (2 characters)
+		F.Intrinsic.String.RPad(v.Local.sTempOrd," ",588,V.Local.sTempOrd)
+		f.Intrinsic.String.Build("Select Product_Line from V_Inventory_MSTR where part = '{0}'",v.Local.sGSSPart,v.Local.sSQL)
+		F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+		F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,<>,True)
+			F.Intrinsic.String.Concat(V.Local.sTempOrd,v.ODBC.conx!rst.FieldValTrim!Product_Line,V.Local.sTempOrd)
+		f.Intrinsic.Control.EndIf
+		f.ODBC.conx!rst.Close	
+	'================================================================================================================================================================================================================================
+	
+		F.Intrinsic.String.Concat(V.Local.sFullTempOrd,V.Local.sTempOrd,V.Ambient.NewLine,V.Local.sFullTempOrd)
+		
+		'WRITE TO LINE SALESHDR.txt
+		F.Intrinsic.Control.If(V.Local.iLine,=,1)
+			F.Intrinsic.File.String2File(V.Global.sFileDirOrd,V.Local.sFullTempOrd)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.File.Append2FileNewLine(V.Global.sFileDirOrd,V.Local.sFullTempOrd)
+		F.Intrinsic.Control.EndIf
+		
+		F.Intrinsic.Math.Add(V.Local.iLine,1,V.Local.iLine)
+		
+		V.Local.sFullTempOrd.Set("")
+	F.Intrinsic.Control.Next(V.Local.iCounter)	
+		
+	f.Data.DataTable.Close("a_Sales_Order")
+	f.Data.DataTable.Close("Sales_Order_Lines")
+	
+	'upload orders
+	F.Global.General.CallWrapperSync(50,"UPLSALES/A")
+	
+	'Set the flag 'Do not Allow Over Shipment of Open Quantity on Sales Orders (Header screen) to True
+	f.Intrinsic.String.Build("UPDATE Order_Header SET No_Over_Shp_Qty = 1 WHERE Order_No = '{0}' AND Record_No = '  A'",v.Global.sOrderNum,v.Local.sSQL)
+	f.ODBC.Connection!conX.Execute(v.Local.sSQL)
+	
+	f.Intrinsic.String.Build("UPDATE Order_Lines SET No_Over_Shp_Qty = 1 WHERE Order_No = '{0}' AND ISNUMERIC(Record_No) = 1",v.Global.sOrderNum,v.Local.sSQL)
+	f.ODBC.Connection!conX.Execute(v.Local.sSQL)
+	
+	'Update Price_code, set to 05
+	f.Intrinsic.String.Build("UPDATE Order_Lines SET Price_Code = '05' WHERE Order_No = '{0}' AND ISNUMERIC(Record_No) = 1",v.Global.sOrderNum,v.Local.sSQL)
+	f.ODBC.Connection!conX.Execute(v.Local.sSQL)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(CatchError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.Create_SalesOrder.End
+
+Program.Sub.form1_unload.Start
+F.Intrinsic.Control.Try
+	F.ODBC.Connection!conX.Close
+	F.Intrinsic.Control.End
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(CatchError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.form1_unload.End
+
+Program.Sub.CatchError.Start
+F.Intrinsic.Control.Try
+	V.Local.sErrorMessage.Declare(String)
+	
+	F.Intrinsic.String.Build("Program: GCG_4789_UPSALES.g2u{0}{0}Sub: {1}{0}Error: {2}{0}Error Description: {3}",V.Ambient.NewLine,V.Args.Sub,V.Args.Error,V.Args.ErrorDescription,V.Local.sErrorMessage)
+	F.Intrinsic.UI.Msgbox(V.Local.sErrorMessage,"Unhandled Error Occurred")
+	
+	F.Intrinsic.Control.If(V.Args.Sub.UCase,!=,"FORM1_UNLOAD")
+		F.Intrinsic.Control.CallSub(Form1_Unload)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Catch
+	F.Intrinsic.UI.Msgbox("Fatal Error occurred in program GCG_4789_UPSALES.g2u","Unhandled Error Occurred")
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry	
+Program.Sub.CatchError.End
+
+Program.Sub.Comments.Start
+${$0$}$GCG_RT_SO_UPLOAD$}$SFF$}$8/13/2014$}$False
+${$3$}$0$}$$}$0$}$-1$}$$}$12:00:00 AM$}$This will be a custom GAB script that will run from a custom Menu Item under Bill of Material -> File -> Custom Cobalt BOM Import.  The user will navigate to the xml file that needs to be loaded into Global Shop.  Once the xml is parsed there will be a search in Global Shop to see if a BOM already exists for that Part Number.  If one already exists a compare screen will display showing the differences between the two.  If one does not exist then the screen will display the BOM as it will be uploaded into Global Shop.  Any parts that are listed in the BOM that are not Inventory Parts will be highlighted in Yellow.  If there are any parts not in inventory the user will have the option to click the create Parts button to generate those parts in Global Shop.  If the BOM exists in Global shop then any differences on the new import will be highlighted in Red.  After the Parts have been created then the Upload button will upload and override any previous BOM for that part.}$12:00:00 AM
+Program.Sub.Comments.End
